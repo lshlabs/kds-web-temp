@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { ApiError, apiGetCurrentUser, apiLogin, apiLogout, apiRefresh, apiRegister } from "./lib/api";
 import { clearStoredTokens, loadStoredTokens, saveAccessToken, saveStoredTokens } from "./lib/auth";
+import { DevNav } from "./components/DevNav";
 import { AuthPage } from "./pages/AuthPage";
 import { KdsPage } from "./pages/KdsPage";
 import { PendingApprovalPage } from "./pages/PendingApprovalPage";
@@ -12,6 +13,8 @@ export default function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [registeredPending, setRegisteredPending] = useState<RegisterResponse | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  // DEV ONLY — 삭제 방법: devPage state와 DevNav 렌더링 코드 제거
+  const [devPage, setDevPage] = useState<"auth" | "pending" | "kds" | null>(null);
 
   useEffect(() => {
     void bootstrapSession();
@@ -107,7 +110,22 @@ export default function App() {
     }
   }
 
-  if (booting) {
+  // DEV ONLY — mock props for forced navigation
+  const mockPendingStore = { storeId: "DEV-001", storeName: "개발 테스트 매장", zipNo: "12345", roadAddress: "서울시 강남구 테헤란로 1", jibunAddress: "", addressDetail: "1층" };
+  const mockPendingUser = { userId: "dev-user", name: "개발자", email: "dev@example.com", approvalStatus: "PENDING" as const };
+  const mockSession = { accessToken: "dev", refreshToken: "dev", user: { ...mockPendingUser, approvalStatus: "APPROVED" as const }, store: mockPendingStore };
+
+  function resolveCurrentPage(): "auth" | "pending" | "kds" {
+    if (devPage) return devPage;
+    if (booting) return "auth";
+    if (registeredPending || !session) return "auth";
+    if (session.user.approvalStatus !== "APPROVED") return "pending";
+    return "kds";
+  }
+
+  const currentPage = resolveCurrentPage();
+
+  if (booting && !devPage) {
     return (
       <div className="status-shell">
         <section className="status-card">
@@ -119,42 +137,43 @@ export default function App() {
     );
   }
 
-  if (registeredPending) {
-    return (
-      <PendingApprovalPage
-        onBackToLogin={() => setRegisteredPending(null)}
-        onLogout={handleLogout}
-        onRefreshStatus={async () => {}}
-        registrationOnly
-        store={registeredPending.store}
-        user={registeredPending.user}
-      />
-    );
-  }
-
-  if (!session) {
+  if (currentPage === "pending") {
+    const pendingStore = registeredPending?.store ?? session?.store ?? mockPendingStore;
+    const pendingUser = registeredPending?.user ?? session?.user ?? mockPendingUser;
+    const isRegOnly = !!registeredPending;
     return (
       <>
-        {bootError ? <div className="boot-banner error">{bootError}</div> : null}
-        <AuthPage onLoginSuccess={handleLoginSuccess} onRegisterSuccess={handleRegisterSuccess} />
+        <DevNav current="pending" onNavigate={setDevPage} />
+        <PendingApprovalPage
+          onBackToLogin={() => { setRegisteredPending(null); setDevPage(null); }}
+          onLogout={handleLogout}
+          onRefreshStatus={isRegOnly ? async () => {} : refreshPendingApprovalStatus}
+          registrationOnly={isRegOnly}
+          store={pendingStore}
+          user={pendingUser}
+        />
       </>
     );
   }
 
-  if (session.user.approvalStatus !== "APPROVED") {
+  if (currentPage === "kds") {
+    const kdsSession = session ?? mockSession;
     return (
-      <PendingApprovalPage
-        onBackToLogin={() => setSession(null)}
-        onLogout={handleLogout}
-        onRefreshStatus={refreshPendingApprovalStatus}
-        registrationOnly={false}
-        store={session.store}
-        user={session.user}
-      />
+      <>
+        <DevNav current="kds" onNavigate={setDevPage} />
+        <KdsPage onLogout={handleLogout} onUnauthorized={reauthorize} session={kdsSession} />
+      </>
     );
   }
 
-  return <KdsPage onLogout={handleLogout} onUnauthorized={reauthorize} session={session} />;
+  // auth (default)
+  return (
+    <>
+      <DevNav current="auth" onNavigate={setDevPage} />
+      {bootError ? <div className="boot-banner error">{bootError}</div> : null}
+      <AuthPage onLoginSuccess={handleLoginSuccess} onRegisterSuccess={handleRegisterSuccess} />
+    </>
+  );
 }
 
 function createSession(current: CurrentUserResponse, accessToken: string, refreshToken: string): AuthSession {
