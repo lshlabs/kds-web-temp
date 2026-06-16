@@ -174,7 +174,7 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess, pendingInfo, onBac
                 <strong>{info?.store.storeName ?? "-"}</strong>
               </div>
               <div className="pending-row">
-                <span>담당자</span>
+                <span>이름</span>
                 <strong>{info?.user.name ?? "-"}</strong>
               </div>
             </div>
