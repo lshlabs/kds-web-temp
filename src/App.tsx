@@ -109,13 +109,13 @@ export default function App() {
 
   if (booting) {
     return (
-      <main className="auth-shell">
+      <div className="status-shell">
         <section className="status-card">
-          <p className="eyebrow">AUTH SESSION</p>
-          <h1>세션 확인 중</h1>
-          <p className="auth-copy">저장된 토큰을 확인하고 매장 계정 상태를 복원하고 있습니다.</p>
+          <div className="status-card-head">
+            <h1>불러오는 중…</h1>
+          </div>
         </section>
-      </main>
+      </div>
     );
   }
 
