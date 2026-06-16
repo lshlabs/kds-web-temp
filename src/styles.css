@@ -552,13 +552,290 @@ button:not(:disabled):hover {
 }
 
 /* ─────────────────────────────────────────────
-   KDS shell
+   KDS shell — sidebar + main layout
 ───────────────────────────────────────────── */
 .kds-shell {
   background: var(--color-bg);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-height: 100vh;
+  position: relative;
+}
+
+.kds-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── Sidebar ── */
+.kds-sidebar {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  transition: width 0.2s ease;
+  width: 52px;
+  z-index: 10;
+}
+
+.kds-sidebar.open {
+  width: 200px;
+}
+
+.kds-sidebar-toggle {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  color: var(--color-text-muted);
+  display: flex;
+  gap: 10px;
+  height: 52px;
+  justify-content: center;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.kds-sidebar.open .kds-sidebar-toggle {
+  justify-content: flex-start;
+}
+
+.kds-sidebar-toggle:not(:disabled):hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.kds-sidebar-toggle-label {
+  color: var(--color-text-subtle);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.kds-sidebar-nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+}
+
+.kds-sidebar-item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: 14px;
+  font-weight: 600;
+  gap: 10px;
+  height: 40px;
+  justify-content: center;
+  padding: 0 10px;
+  position: relative;
+  width: 100%;
+}
+
+.kds-sidebar.open .kds-sidebar-item {
+  justify-content: flex-start;
+}
+
+.kds-sidebar-item:not(:disabled):hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.kds-sidebar-item.active {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.kds-sidebar-item.active:not(:disabled):hover {
+  background: var(--color-accent-subtle);
+}
+
+.kds-sidebar-item svg {
+  flex-shrink: 0;
+}
+
+.kds-sidebar-item span {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Badge inside open sidebar */
+.kds-sidebar-badge {
+  align-items: center;
+  background: var(--color-accent);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
+.kds-sidebar-badge.secondary {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+/* Dot indicator for collapsed sidebar */
+.kds-sidebar-dot {
+  background: var(--color-accent);
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  display: block;
+  height: 8px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 8px;
+}
+
+/* ── Account section (sidebar bottom) ── */
+.kds-sidebar-account {
+  border-top: 1px solid var(--color-border);
+  padding: 8px 6px;
+  position: relative;
+}
+
+.kds-account-trigger {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 10px;
+  height: 40px;
+  justify-content: center;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.kds-sidebar.open .kds-account-trigger {
+  justify-content: flex-start;
+}
+
+.kds-account-trigger:not(:disabled):hover {
+  background: var(--color-surface-2);
+}
+
+.kds-account-trigger.active {
+  background: var(--color-surface-2);
+}
+
+.kds-account-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.kds-account-avatar.large {
+  height: 36px;
+  font-size: 14px;
+  width: 36px;
+}
+
+.kds-account-trigger-name {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Account popover */
+.kds-account-popover {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  bottom: calc(100% + 8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  left: 6px;
+  min-width: 220px;
+  padding: 4px;
+  position: absolute;
+  z-index: 100;
+}
+
+.kds-account-popover-info {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  padding: 10px 10px 10px 10px;
+}
+
+.kds-account-name {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.kds-account-email {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kds-account-popover-divider {
+  background: var(--color-border);
+  height: 1px;
+  margin: 4px 0;
+}
+
+.kds-account-popover-item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-subtle);
+  display: flex;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.kds-account-popover-item:not(:disabled):hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.kds-account-popover-item.signout {
+  color: var(--color-error-text);
+}
+
+.kds-account-popover-item.signout:not(:disabled):hover {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
 }
 
 /* ── Top bar ── */
@@ -567,38 +844,14 @@ button:not(:disabled):hover {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   display: flex;
+  flex-shrink: 0;
   gap: 16px;
+  height: 52px;
   justify-content: space-between;
   padding: 0 20px;
-  height: 52px;
-  flex-shrink: 0;
 }
 
-.kds-topbar-brand {
-  align-items: center;
-  display: flex;
-  flex-shrink: 0;
-  gap: 8px;
-}
-
-.kds-brand-dot {
-  background: var(--color-accent);
-  border-radius: 50%;
-  display: block;
-  flex-shrink: 0;
-  height: 8px;
-  width: 8px;
-}
-
-.kds-brand-name {
-  color: var(--color-text);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  white-space: nowrap;
-}
-
-/* ── Top bar tabs (centered) ── */
+/* ── Top bar tabs ── */
 .kds-topbar-tabs {
   align-items: center;
   display: flex;
@@ -666,12 +919,12 @@ button:not(:disabled):hover {
 
 .kds-stat-pill {
   align-items: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   display: flex;
   gap: 5px;
   padding: 4px 10px;
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
 }
 
 .kds-stat-pill span {
@@ -690,37 +943,76 @@ button:not(:disabled):hover {
 .kds-stat-pill.cooking strong { color: #16a34a; }
 .kds-stat-pill.done strong { color: var(--color-text-muted); }
 
-.kds-logout-btn {
-  background: transparent;
+/* Loading dot in topbar */
+.kds-loading-dot {
+  animation: kds-pulse 1.2s ease-in-out infinite;
+  background: var(--color-text-muted);
+  border-radius: 50%;
+  display: block;
+  height: 7px;
+  width: 7px;
+}
+
+@keyframes kds-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* ── Toast ── */
+.kds-toast {
+  align-items: center;
+  animation: kds-toast-in 0.2s ease;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-subtle);
-  font-size: 12px;
-  font-weight: 600;
-  height: 32px;
-  padding: 0 12px;
-}
-
-.kds-logout-btn:not(:disabled):hover {
-  background: var(--color-surface-2);
-  border-color: var(--color-border-hover);
+  border-radius: var(--radius-md);
+  bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   color: var(--color-text);
-}
-
-/* ── Notice bar (error / loading) ── */
-.kds-notice {
-  background: var(--color-surface-2);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-subtle);
+  display: flex;
   font-size: 13px;
-  padding: 8px 20px;
-  text-align: center;
+  font-weight: 500;
+  gap: 8px;
+  left: 50%;
+  max-width: 360px;
+  padding: 10px 12px 10px 14px;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 200;
 }
 
-.kds-notice.error {
+.kds-toast.error {
   background: var(--color-error-bg);
-  border-bottom-color: var(--color-error-border);
+  border-color: var(--color-error-border);
   color: var(--color-error-text);
+}
+
+.kds-toast span {
+  flex: 1;
+}
+
+.kds-toast-close {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  display: flex;
+  flex-shrink: 0;
+  height: 24px;
+  justify-content: center;
+  opacity: 0.6;
+  padding: 0;
+  width: 24px;
+}
+
+.kds-toast-close:not(:disabled):hover {
+  background: rgba(0, 0, 0, 0.06);
+  opacity: 1;
+}
+
+@keyframes kds-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* ── Board ── */
@@ -765,7 +1057,7 @@ button:not(:disabled):hover {
   width: 100%;
 }
 
-/* ─────────────────────────────────────────────
+/* ─────────��───────────────────────────────────
    Order card
 ───────────────────────────────────────────── */
 .kds-card {
@@ -1042,6 +1334,10 @@ button:not(:disabled):hover {
 
   .auth-card {
     padding: 40px 24px;
+  }
+
+  .kds-sidebar {
+    width: 44px;
   }
 
   .kds-topbar {
