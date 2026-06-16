@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { API_ORIGIN, ApiError, apiLogin, apiRegister } from "../lib/api";
 import type { AuthResponse, LoginRequest, RegisterRequest, RegisterResponse } from "../types";
@@ -32,6 +32,9 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [addressHint, setAddressHint] = useState<string | null>(null);
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [autoLogin, setAutoLogin] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -120,7 +123,7 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
         <div className="auth-hero-top">
           <div className="auth-brand">
             <div className="auth-brand-icon">D</div>
-            <span className="auth-brand-name">DeepOrder</span>
+            <span className="auth-brand-name">DeepOrder KDS</span>
           </div>
 
           <div className="auth-hero-headline">
@@ -158,9 +161,11 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
           </div>
 
           {/* Heading */}
-          <div className="auth-form-head">
-            <h2>{tab === "login" ? "다시 만나요" : "매장 등록"}</h2>
-          </div>
+          {tab === "register" && (
+            <div className="auth-form-head">
+              <h2>매장 등록</h2>
+            </div>
+          )}
 
           {/* Error */}
           {errorMessage ? <div className="banner error" role="alert">{errorMessage}</div> : null}
@@ -171,10 +176,10 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                 <label htmlFor="login-email">이메일</label>
                 <input
                   id="login-email"
+                  ref={emailRef}
                   autoComplete="email"
                   name="email"
                   onChange={(e) => setLoginForm((c) => ({ ...c, email: e.target.value }))}
-                  placeholder="owner@example.com"
                   required
                   type="email"
                   value={loginForm.email}
@@ -189,11 +194,29 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                   minLength={8}
                   name="password"
                   onChange={(e) => setLoginForm((c) => ({ ...c, password: e.target.value }))}
-                  placeholder="8자 이상"
                   required
                   type="password"
                   value={loginForm.password}
                 />
+              </div>
+
+              <div className="login-options">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={rememberEmail}
+                    onChange={(e) => setRememberEmail(e.target.checked)}
+                  />
+                  아이디 저장
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={autoLogin}
+                    onChange={(e) => setAutoLogin(e.target.checked)}
+                  />
+                  자동 로그인
+                </label>
               </div>
 
               <button className="auth-submit" disabled={submitting} type="submit">
@@ -209,7 +232,6 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                     id="reg-name"
                     name="name"
                     onChange={(e) => setRegisterForm((c) => ({ ...c, name: e.target.value }))}
-                    placeholder="홍길동"
                     required
                     value={registerForm.name}
                   />
@@ -220,7 +242,6 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                     id="reg-store-name"
                     name="storeName"
                     onChange={(e) => setRegisterForm((c) => ({ ...c, storeName: e.target.value }))}
-                    placeholder="딥오더 매장"
                     required
                     value={registerForm.storeName}
                   />
@@ -234,7 +255,6 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                   autoComplete="email"
                   name="email"
                   onChange={(e) => setRegisterForm((c) => ({ ...c, email: e.target.value }))}
-                  placeholder="owner@example.com"
                   required
                   type="email"
                   value={registerForm.email}
@@ -250,7 +270,6 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                     minLength={8}
                     name="password"
                     onChange={(e) => setRegisterForm((c) => ({ ...c, password: e.target.value }))}
-                    placeholder="8자 이상"
                     required
                     type="password"
                     value={registerForm.password}
@@ -262,19 +281,17 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                     id="reg-phone"
                     name="storePhone"
                     onChange={(e) => setRegisterForm((c) => ({ ...c, storePhone: e.target.value }))}
-                    placeholder="010-0000-0000"
                     value={registerForm.storePhone}
                   />
                 </div>
               </div>
 
               <div className="field">
-                <label>주소</label>
+                <label>매장주소</label>
                 <div className="field-inline">
                   <input
                     name="zipNo"
                     onChange={(e) => setRegisterForm((c) => ({ ...c, zipNo: e.target.value }))}
-                    placeholder="우편번호"
                     value={registerForm.zipNo}
                     readOnly
                   />
@@ -290,7 +307,6 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                   id="reg-road-address"
                   name="roadAddress"
                   onChange={(e) => setRegisterForm((c) => ({ ...c, roadAddress: e.target.value }))}
-                  placeholder="자동 입력됩니다"
                   value={registerForm.roadAddress}
                   readOnly
                 />
@@ -302,7 +318,6 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                   id="reg-address-detail"
                   name="addressDetail"
                   onChange={(e) => setRegisterForm((c) => ({ ...c, addressDetail: e.target.value }))}
-                  placeholder="동/호수 입력"
                   value={registerForm.addressDetail}
                 />
               </div>
