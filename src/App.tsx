@@ -5,7 +5,6 @@ import { clearStoredTokens, loadStoredTokens, saveAccessToken, saveStoredTokens 
 import { DevNav } from "./components/DevNav";
 import { AuthPage } from "./pages/AuthPage";
 import { KdsPage } from "./pages/KdsPage";
-import { PendingApprovalPage } from "./pages/PendingApprovalPage";
 import type { AuthResponse, AuthSession, CurrentUserResponse, RegisterResponse } from "./types";
 
 export default function App() {
@@ -140,17 +139,14 @@ export default function App() {
   if (currentPage === "pending") {
     const pendingStore = registeredPending?.store ?? session?.store ?? mockPendingStore;
     const pendingUser = registeredPending?.user ?? session?.user ?? mockPendingUser;
-    const isRegOnly = !!registeredPending;
     return (
       <>
         <DevNav current="pending" onNavigate={setDevPage} />
-        <PendingApprovalPage
-          onBackToLogin={() => { setRegisteredPending(null); setDevPage(null); }}
-          onLogout={handleLogout}
-          onRefreshStatus={isRegOnly ? async () => {} : refreshPendingApprovalStatus}
-          registrationOnly={isRegOnly}
-          store={pendingStore}
-          user={pendingUser}
+        <AuthPage
+          onLoginSuccess={handleLoginSuccess}
+          onRegisterSuccess={handleRegisterSuccess}
+          pendingInfo={{ user: pendingUser, store: pendingStore }}
+          onBackFromPending={() => { setRegisteredPending(null); setSession(null); setDevPage(null); }}
         />
       </>
     );

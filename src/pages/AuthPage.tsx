@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import { API_ORIGIN, ApiError, apiLogin, apiRegister } from "../lib/api";
-import type { AuthResponse, LoginRequest, RegisterRequest, RegisterResponse } from "../types";
+import type { AuthResponse, AuthStore, AuthUser, LoginRequest, RegisterRequest, RegisterResponse } from "../types";
 
 type AuthPageProps = {
   onLoginSuccess: (response: AuthResponse) => void;
   onRegisterSuccess: (response: RegisterResponse) => void;
+  /** When set, the right panel shows the pending approval view instead of the login form */
+  pendingInfo?: { user: AuthUser; store: AuthStore } | null;
+  onBackFromPending?: () => void;
 };
 
 const defaultLoginForm: LoginRequest = {
@@ -25,7 +28,7 @@ const defaultRegisterForm: RegisterRequest = {
   addressDetail: "",
 };
 
-export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
+export function AuthPage({ onLoginSuccess, onRegisterSuccess, pendingInfo, onBackFromPending }: AuthPageProps) {
   const [tab, setTab] = useState<"login" | "register">("login");
   const [loginForm, setLoginForm] = useState(defaultLoginForm);
   const [registerForm, setRegisterForm] = useState(defaultRegisterForm);
@@ -34,7 +37,18 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
   const [addressHint, setAddressHint] = useState<string | null>(null);
   const [rememberEmail, setRememberEmail] = useState(false);
   const [autoLogin, setAutoLogin] = useState(false);
+  // Controls the CSS transition: "form" | "pending"
+  const [view, setView] = useState<"form" | "pending">(pendingInfo ? "pending" : "form");
   const emailRef = useRef<HTMLInputElement>(null);
+
+  // Sync view when pendingInfo changes from outside (e.g. login returns PENDING)
+  useEffect(() => {
+    if (pendingInfo) {
+      setView("pending");
+    } else {
+      setView("form");
+    }
+  }, [pendingInfo]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -116,6 +130,13 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
     }
   }
 
+  function handleBack() {
+    setView("form");
+    onBackFromPending?.();
+  }
+
+  const info = pendingInfo;
+
   return (
     <main className="auth-shell">
       {/* ── Left: brand panel ── */}
@@ -138,188 +159,214 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
       {/* ── Right: form panel ── */}
       <section className="auth-card">
         <div className="auth-form-wrap">
-          {/* Tab switcher */}
-          <div className="auth-tabs" role="tablist" aria-label="인증 화면 선택">
-            <button
-              className={tab === "login" ? "auth-tab active" : "auth-tab"}
-              onClick={() => switchTab("login")}
-              role="tab"
-              aria-selected={tab === "login"}
-              type="button"
-            >
-              로그인
-            </button>
-            <button
-              className={tab === "register" ? "auth-tab active" : "auth-tab"}
-              onClick={() => switchTab("register")}
-              role="tab"
-              aria-selected={tab === "register"}
-              type="button"
-            >
-              매장 가입
+
+          {/* ── Pending approval view ── */}
+          <div className={`auth-view${view === "pending" ? " auth-view--visible" : ""}`} aria-hidden={view !== "pending"}>
+            <div className="pending-head">
+              <span className="status-badge">승인 대기</span>
+              <h2>가입 신청 완료</h2>
+              <p>관리자 검토 후 승인되면 로그인할 수 있습니다.</p>
+            </div>
+
+            <div className="pending-summary">
+              <div className="pending-row">
+                <span>매장명</span>
+                <strong>{info?.store.storeName ?? "-"}</strong>
+              </div>
+              <div className="pending-row">
+                <span>담당자</span>
+                <strong>{info?.user.name ?? "-"}</strong>
+              </div>
+            </div>
+
+            <button className="btn-outline auth-submit" onClick={handleBack} type="button">
+              이전으로
             </button>
           </div>
 
-          {/* Heading */}
-          {tab === "register"}
-
-          {/* Error */}
-          {errorMessage ? <div className="banner error" role="alert">{errorMessage}</div> : null}
-
-          {tab === "login" ? (
-            <form className="auth-form" onSubmit={handleLoginSubmit} noValidate>
-              <div className="field">
-                <label htmlFor="login-email">이메일</label>
-                <input
-                  id="login-email"
-                  ref={emailRef}
-                  autoComplete="email"
-                  name="email"
-                  onChange={(e) => setLoginForm((c) => ({ ...c, email: e.target.value }))}
-                  required
-                  type="email"
-                  value={loginForm.email}
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="login-password">비밀번호</label>
-                <input
-                  id="login-password"
-                  autoComplete="current-password"
-                  minLength={8}
-                  name="password"
-                  onChange={(e) => setLoginForm((c) => ({ ...c, password: e.target.value }))}
-                  required
-                  type="password"
-                  value={loginForm.password}
-                />
-              </div>
-
-              <div className="login-options">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={rememberEmail}
-                    onChange={(e) => setRememberEmail(e.target.checked)}
-                  />
-                  아이디 저장
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={autoLogin}
-                    onChange={(e) => setAutoLogin(e.target.checked)}
-                  />
-                  자동 로그인
-                </label>
-              </div>
-
-              <button className="auth-submit" disabled={submitting} type="submit">
-                {submitting ? "로그인 중…" : "로그인"}
+          {/* ── Auth form view (login / register) ── */}
+          <div className={`auth-view${view === "form" ? " auth-view--visible" : ""}`} aria-hidden={view !== "form"}>
+            {/* Tab switcher */}
+            <div className="auth-tabs" role="tablist" aria-label="인증 화면 선택">
+              <button
+                className={tab === "login" ? "auth-tab active" : "auth-tab"}
+                onClick={() => switchTab("login")}
+                role="tab"
+                aria-selected={tab === "login"}
+                type="button"
+              >
+                로그인
               </button>
-            </form>
-          ) : (
-            <form className="auth-form" onSubmit={handleRegisterSubmit} noValidate>
-              {/* 이름 */}
-              <div className="field">
-                <label htmlFor="reg-name">이름</label>
-                <input
-                  id="reg-name"
-                  name="name"
-                  onChange={(e) => setRegisterForm((c) => ({ ...c, name: e.target.value }))}
-                  required
-                  value={registerForm.name}
-                />
-              </div>
+              <button
+                className={tab === "register" ? "auth-tab active" : "auth-tab"}
+                onClick={() => switchTab("register")}
+                role="tab"
+                aria-selected={tab === "register"}
+                type="button"
+              >
+                매장 가입
+              </button>
+            </div>
 
-              {/* 이메일 */}
-              <div className="field">
-                <label htmlFor="reg-email">이메일</label>
-                <input
-                  id="reg-email"
-                  autoComplete="email"
-                  name="email"
-                  onChange={(e) => setRegisterForm((c) => ({ ...c, email: e.target.value }))}
-                  required
-                  type="email"
-                  value={registerForm.email}
-                />
-              </div>
+            {/* Error */}
+            {errorMessage ? <div className="banner error" role="alert">{errorMessage}</div> : null}
 
-              {/* 비밀번호 */}
-              <div className="field">
-                <label htmlFor="reg-password">비밀번호</label>
-                <input
-                  id="reg-password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  name="password"
-                  onChange={(e) => setRegisterForm((c) => ({ ...c, password: e.target.value }))}
-                  required
-                  type="password"
-                  value={registerForm.password}
-                />
-              </div>
-
-              {/* 매장명 + 매장 연락처 */}
-              <div className="field-row">
+            {tab === "login" ? (
+              <form className="auth-form" onSubmit={handleLoginSubmit} noValidate>
                 <div className="field">
-                  <label htmlFor="reg-store-name">매장명</label>
+                  <label htmlFor="login-email">이메일</label>
                   <input
-                    id="reg-store-name"
-                    name="storeName"
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, storeName: e.target.value }))}
+                    id="login-email"
+                    ref={emailRef}
+                    autoComplete="email"
+                    name="email"
+                    onChange={(e) => setLoginForm((c) => ({ ...c, email: e.target.value }))}
                     required
-                    value={registerForm.storeName}
+                    type="email"
+                    value={loginForm.email}
                   />
                 </div>
+
                 <div className="field">
-                  <label htmlFor="reg-phone">연락처</label>
+                  <label htmlFor="login-password">비밀번호</label>
                   <input
-                    id="reg-phone"
-                    name="storePhone"
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, storePhone: e.target.value }))}
-                    value={registerForm.storePhone}
+                    id="login-password"
+                    autoComplete="current-password"
+                    minLength={8}
+                    name="password"
+                    onChange={(e) => setLoginForm((c) => ({ ...c, password: e.target.value }))}
+                    required
+                    type="password"
+                    value={loginForm.password}
                   />
                 </div>
-              </div>
 
-              {/* 매장주소 + 주소검색 */}
-              <div className="field">
-                <label htmlFor="reg-store-address">매장주소</label>
-                <div className="field-inline">
-                  <input
-                    id="reg-store-address"
-                    name="roadAddress"
-                    readOnly
-                    value={registerForm.roadAddress}
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, roadAddress: e.target.value }))}
-                  />
-                  <button className="btn-outline" onClick={handleAddressSearch} type="button">
-                    주소 검색
-                  </button>
+                <div className="login-options">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={rememberEmail}
+                      onChange={(e) => setRememberEmail(e.target.checked)}
+                    />
+                    아이디 저장
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={autoLogin}
+                      onChange={(e) => setAutoLogin(e.target.checked)}
+                    />
+                    자동 로그인
+                  </label>
                 </div>
-              </div>
 
-              {/* 상세주소 */}
-              <div className="field">
-                <label htmlFor="reg-address-detail">상세주소</label>
-                <input
-                  id="reg-address-detail"
-                  name="addressDetail"
-                  onChange={(e) => setRegisterForm((c) => ({ ...c, addressDetail: e.target.value }))}
-                  value={registerForm.addressDetail}
-                />
-              </div>
+                <button className="auth-submit" disabled={submitting} type="submit">
+                  {submitting ? "로그인 중…" : "로그인"}
+                </button>
+              </form>
+            ) : (
+              <form className="auth-form" onSubmit={handleRegisterSubmit} noValidate>
+                {/* 이름 */}
+                <div className="field">
+                  <label htmlFor="reg-name">이름</label>
+                  <input
+                    id="reg-name"
+                    name="name"
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, name: e.target.value }))}
+                    required
+                    value={registerForm.name}
+                  />
+                </div>
 
-              {addressHint ? <div className="banner" role="status">{addressHint}</div> : null}
+                {/* 이메일 */}
+                <div className="field">
+                  <label htmlFor="reg-email">이메일</label>
+                  <input
+                    id="reg-email"
+                    autoComplete="email"
+                    name="email"
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, email: e.target.value }))}
+                    required
+                    type="email"
+                    value={registerForm.email}
+                  />
+                </div>
 
-              <button className="auth-submit" disabled={submitting} type="submit">
-                {submitting ? "신청 중…" : "가입 신청"}
-              </button>
-            </form>
-          )}
+                {/* 비밀번호 */}
+                <div className="field">
+                  <label htmlFor="reg-password">비밀번호</label>
+                  <input
+                    id="reg-password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    name="password"
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, password: e.target.value }))}
+                    required
+                    type="password"
+                    value={registerForm.password}
+                  />
+                </div>
+
+                {/* 매장명 + 매장 연락처 */}
+                <div className="field-row">
+                  <div className="field">
+                    <label htmlFor="reg-store-name">매장명</label>
+                    <input
+                      id="reg-store-name"
+                      name="storeName"
+                      onChange={(e) => setRegisterForm((c) => ({ ...c, storeName: e.target.value }))}
+                      required
+                      value={registerForm.storeName}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="reg-phone">연락처</label>
+                    <input
+                      id="reg-phone"
+                      name="storePhone"
+                      onChange={(e) => setRegisterForm((c) => ({ ...c, storePhone: e.target.value }))}
+                      value={registerForm.storePhone}
+                    />
+                  </div>
+                </div>
+
+                {/* 매장주소 + 주소검색 */}
+                <div className="field">
+                  <label htmlFor="reg-store-address">매장주소</label>
+                  <div className="field-inline">
+                    <input
+                      id="reg-store-address"
+                      name="roadAddress"
+                      readOnly
+                      value={registerForm.roadAddress}
+                      onChange={(e) => setRegisterForm((c) => ({ ...c, roadAddress: e.target.value }))}
+                    />
+                    <button className="btn-outline" onClick={handleAddressSearch} type="button">
+                      주소 검색
+                    </button>
+                  </div>
+                </div>
+
+                {/* 상세주소 */}
+                <div className="field">
+                  <label htmlFor="reg-address-detail">상세주소</label>
+                  <input
+                    id="reg-address-detail"
+                    name="addressDetail"
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, addressDetail: e.target.value }))}
+                    value={registerForm.addressDetail}
+                  />
+                </div>
+
+                {addressHint ? <div className="banner" role="status">{addressHint}</div> : null}
+
+                <button className="auth-submit" disabled={submitting} type="submit">
+                  {submitting ? "신청 중…" : "가입 신청"}
+                </button>
+              </form>
+            )}
+          </div>
+
         </div>
       </section>
     </main>
