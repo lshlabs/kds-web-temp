@@ -911,51 +911,40 @@ button:not(:disabled):hover {
   gap: 12px;
 }
 
-.kds-stat-row {
+/* Refresh button */
+.kds-refresh-btn {
   align-items: center;
-  display: flex;
-  gap: 6px;
-}
-
-.kds-stat-pill {
-  align-items: center;
-  background: var(--color-surface-2);
+  background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
-  display: flex;
-  gap: 5px;
-  padding: 4px 10px;
-}
-
-.kds-stat-pill span {
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
-  font-size: 11px;
-  font-weight: 600;
+  display: flex;
+  flex-shrink: 0;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  width: 32px;
 }
 
-.kds-stat-pill strong {
+.kds-refresh-btn:not(:disabled):hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-hover);
   color: var(--color-text);
-  font-size: 13px;
-  font-weight: 700;
 }
 
-.kds-stat-pill.new strong { color: #ef4444; }
-.kds-stat-pill.cooking strong { color: #16a34a; }
-.kds-stat-pill.done strong { color: var(--color-text-muted); }
-
-/* Loading dot in topbar */
-.kds-loading-dot {
-  animation: kds-pulse 1.2s ease-in-out infinite;
-  background: var(--color-text-muted);
-  border-radius: 50%;
-  display: block;
-  height: 7px;
-  width: 7px;
+.kds-refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
-@keyframes kds-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
+.kds-refresh-btn.spinning svg {
+  animation: kds-spin 0.7s linear infinite;
+}
+
+@keyframes kds-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 /* ── Toast ── */
@@ -1342,10 +1331,6 @@ button:not(:disabled):hover {
 
   .kds-topbar {
     padding: 0 12px;
-  }
-
-  .kds-stat-row {
-    display: none;
   }
 
   .kds-board {

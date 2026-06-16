@@ -404,12 +404,17 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           </div>
 
           <div className="kds-topbar-right">
-            <div className="kds-stat-row">
-              <StatPill label="신규" value={counts.NEW} tone="new" />
-              <StatPill label="조리중" value={counts.COOKING} tone="cooking" />
-              <StatPill label="완료" value={counts.DONE} tone="done" />
-            </div>
-            {loading && <span className="kds-loading-dot" aria-label="불러오는 중" />}
+            <button
+              aria-label="주문 새로고침"
+              className={`kds-refresh-btn${loading ? " spinning" : ""}`}
+              disabled={loading}
+              onClick={fetchOrders}
+              type="button"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M13.65 2.35A8 8 0 1 0 15 8h-1.5A6.5 6.5 0 1 1 8 1.5a6.46 6.46 0 0 1 4.24 1.6L10 5.5h4V1.5l-2.35.85z" fill="currentColor" />
+              </svg>
+            </button>
           </div>
         </header>
 
@@ -482,15 +487,6 @@ async function requestWithReauth<T>(
     if (!next) throw error;
     return request(next);
   }
-}
-
-function StatPill({ label, value, tone }: { label: string; value: number; tone: "new" | "cooking" | "done" }) {
-  return (
-    <div className={`kds-stat-pill ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
 }
 
 /* ── Order Card ── */
