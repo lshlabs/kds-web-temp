@@ -225,29 +225,19 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
             </form>
           ) : (
             <form className="auth-form" onSubmit={handleRegisterSubmit} noValidate>
-              <div className="field-row">
-                <div className="field">
-                  <label htmlFor="reg-name">담당자 이름</label>
-                  <input
-                    id="reg-name"
-                    name="name"
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, name: e.target.value }))}
-                    required
-                    value={registerForm.name}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="reg-store-name">매장명</label>
-                  <input
-                    id="reg-store-name"
-                    name="storeName"
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, storeName: e.target.value }))}
-                    required
-                    value={registerForm.storeName}
-                  />
-                </div>
+              {/* 이름 */}
+              <div className="field">
+                <label htmlFor="reg-name">이름</label>
+                <input
+                  id="reg-name"
+                  name="name"
+                  onChange={(e) => setRegisterForm((c) => ({ ...c, name: e.target.value }))}
+                  required
+                  value={registerForm.name}
+                />
               </div>
 
+              {/* 이메일 */}
               <div className="field">
                 <label htmlFor="reg-email">이메일</label>
                 <input
@@ -261,18 +251,31 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                 />
               </div>
 
+              {/* 비밀번호 */}
+              <div className="field">
+                <label htmlFor="reg-password">비밀번호</label>
+                <input
+                  id="reg-password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  name="password"
+                  onChange={(e) => setRegisterForm((c) => ({ ...c, password: e.target.value }))}
+                  required
+                  type="password"
+                  value={registerForm.password}
+                />
+              </div>
+
+              {/* 매장명 + 매장 연락처 */}
               <div className="field-row">
                 <div className="field">
-                  <label htmlFor="reg-password">비밀번호</label>
+                  <label htmlFor="reg-store-name">매장명</label>
                   <input
-                    id="reg-password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    name="password"
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, password: e.target.value }))}
+                    id="reg-store-name"
+                    name="storeName"
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, storeName: e.target.value }))}
                     required
-                    type="password"
-                    value={registerForm.password}
+                    value={registerForm.storeName}
                   />
                 </div>
                 <div className="field">
@@ -286,14 +289,16 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                 </div>
               </div>
 
+              {/* 매장주소 + 주소검색 */}
               <div className="field">
-                <label>매장주소</label>
+                <label htmlFor="reg-store-address">매장주소</label>
                 <div className="field-inline">
                   <input
-                    name="zipNo"
-                    onChange={(e) => setRegisterForm((c) => ({ ...c, zipNo: e.target.value }))}
-                    value={registerForm.zipNo}
+                    id="reg-store-address"
+                    name="roadAddress"
                     readOnly
+                    value={registerForm.roadAddress}
+                    onChange={(e) => setRegisterForm((c) => ({ ...c, roadAddress: e.target.value }))}
                   />
                   <button className="btn-outline" onClick={handleAddressSearch} type="button">
                     주소 검색
@@ -301,17 +306,7 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                 </div>
               </div>
 
-              <div className="field">
-                <label htmlFor="reg-road-address">도로명주소</label>
-                <input
-                  id="reg-road-address"
-                  name="roadAddress"
-                  onChange={(e) => setRegisterForm((c) => ({ ...c, roadAddress: e.target.value }))}
-                  value={registerForm.roadAddress}
-                  readOnly
-                />
-              </div>
-
+              {/* 상세주소 */}
               <div className="field">
                 <label htmlFor="reg-address-detail">상세주소</label>
                 <input
