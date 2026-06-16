@@ -1,10 +1,143 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, apiGetKdsOrders, apiUpdateOrderStatus } from "../lib/api";
 import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus } from "../types";
 
 const POLLING_INTERVAL_MS = 3000;
 type BoardTab = "RECEIVED" | "DONE";
+
+// ── DEV 샘플 주문 데이터 ──────────────────────────────────────────────────────
+// 삭제 방법: 아래 MOCK_ORDERS 상수와 fetchOrders 내 "|| MOCK_ORDERS" 부분을 제거
+const _now = new Date();
+const _ago = (min: number) => new Date(_now.getTime() - min * 60 * 1000).toISOString();
+
+const MOCK_ORDERS: Order[] = [
+  {
+    id: 1001,
+    platform: "store",
+    store_id: "DEV-001",
+    external_order_id: "ext-1001",
+    order_number: "1",
+    status: "NEW",
+    customer_request: "젓가락 빼주세요",
+    delivery_request: null,
+    ordered_at: _ago(3),
+    created_at: _ago(3),
+    updated_at: _ago(3),
+    items: [
+      { id: 1, name: "제육볶음", quantity: 2, options: [], unit_price: 9000, total_price: 18000 },
+      { id: 2, name: "된장찌개", quantity: 1, options: ["공기밥 추가", "라면 사리 추가"], unit_price: 8000, total_price: 8000 },
+      { id: 3, name: "소머리국밥", quantity: 1, options: [], unit_price: 11000, total_price: 11000 },
+    ],
+    aiAnalysis: null,
+  },
+  {
+    id: 1002,
+    platform: "delivery",
+    store_id: "DEV-001",
+    external_order_id: "ext-1002",
+    order_number: "2",
+    status: "COOKING",
+    customer_request: "매운 거 잘 못 먹어서 떡볶이는 안맵게 조절 부탁드려요",
+    delivery_request: "문 앞에 놔주세요",
+    ordered_at: _ago(11),
+    created_at: _ago(11),
+    updated_at: _ago(8),
+    items: [
+      { id: 4, name: "[세트메뉴] 떡볶이 + 순대", quantity: 1, options: ["소스 추가"], unit_price: 14000, total_price: 14000 },
+      { id: 5, name: "목은지 김치찜", quantity: 2, options: [], unit_price: 12000, total_price: 24000 },
+    ],
+    aiAnalysis: {
+      summary: "매운맛 조절 요청",
+      tags: ["맵기조절"],
+      cookingNotes: ["떡볶이 덜 맵게"],
+      packingNotes: [],
+      deliveryNotes: ["문 앞"],
+      kitchenActions: [
+        {
+          type: "TASTE_ADJUSTMENT",
+          label: "맵기 조절",
+          target: "떡볶이",
+          displayText: "떡볶이 덜 맵게",
+          severity: "LOW",
+          requiresHumanCheck: false,
+          source: "customer_request",
+          sourceText: "안맵게 조절",
+          matchedMenuItemIds: [4],
+        },
+      ],
+      packingActions: [],
+      ignoredRequests: [],
+      riskLevel: "LOW",
+      warnings: [],
+      needsHumanCheck: false,
+      analysisStatus: "COMPLETED",
+    },
+  },
+  {
+    id: 1003,
+    platform: "takeout",
+    store_id: "DEV-001",
+    external_order_id: "ext-1003",
+    order_number: "3",
+    status: "COOKING",
+    customer_request: "견과류 알레르기 있어요. 땅콩 절대 안됩니다",
+    delivery_request: null,
+    ordered_at: _ago(17),
+    created_at: _ago(17),
+    updated_at: _ago(12),
+    items: [
+      { id: 6, name: "잡채", quantity: 1, options: [], unit_price: 9000, total_price: 9000 },
+      { id: 7, name: "궁중 떡볶이", quantity: 2, options: ["치즈 추가"], unit_price: 10000, total_price: 20000 },
+    ],
+    aiAnalysis: {
+      summary: "견과류 알레르기 주의",
+      tags: ["알레르기"],
+      cookingNotes: ["땅콩 사용 금지"],
+      packingNotes: [],
+      deliveryNotes: [],
+      kitchenActions: [
+        {
+          type: "ALLERGY",
+          label: "알레르기",
+          target: "견과류",
+          displayText: "땅콩 제외 (알레르기)",
+          severity: "HIGH",
+          requiresHumanCheck: true,
+          source: "customer_request",
+          sourceText: "견과류 알레르기 있어요",
+          matchedMenuItemIds: [6, 7],
+        },
+      ],
+      packingActions: [],
+      ignoredRequests: [],
+      riskLevel: "HIGH",
+      warnings: ["알레르기 위험 항목 포함"],
+      needsHumanCheck: true,
+      analysisStatus: "COMPLETED",
+    },
+  },
+  {
+    id: 1004,
+    platform: "store",
+    store_id: "DEV-001",
+    external_order_id: "ext-1004",
+    order_number: "4",
+    status: "DONE",
+    customer_request: null,
+    delivery_request: null,
+    ordered_at: _ago(32),
+    created_at: _ago(32),
+    updated_at: _ago(25),
+    items: [
+      { id: 8, name: "뚝배기 불고기", quantity: 1, options: [], unit_price: 13000, total_price: 13000 },
+      { id: 9, name: "참치마요 주먹밥", quantity: 3, options: [], unit_price: 3000, total_price: 9000 },
+      { id: 10, name: "라면", quantity: 1, options: ["사리 추가"], unit_price: 5000, total_price: 5000 },
+    ],
+    aiAnalysis: null,
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────
 
 type KdsPageProps = {
   session: AuthSession;
@@ -15,23 +148,35 @@ type KdsPageProps = {
 export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "error" | "info" } | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState<BoardTab>("RECEIVED");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  function showToast(message: string, type: "error" | "info" = "error") {
+    setToast({ message, type });
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 4000);
+  }
 
   const fetchOrders = useCallback(async () => {
     try {
       const data = await requestWithReauth(session.accessToken, onUnauthorized, apiGetKdsOrders);
-      setOrders(data.orders);
-      setErrorMessage(null);
+      // DEV: API 결과가 비어 있으면 샘플 데이터 사용 — 삭제 방법: "|| MOCK_ORDERS" 부분 제거
+      setOrders(data.orders.length > 0 ? data.orders : MOCK_ORDERS);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        setErrorMessage("로그인이 만료되었습니다. 다시 로그인해주세요.");
+        showToast("로그인이 만료되었습니다.");
         return;
       }
-      setErrorMessage(error instanceof Error ? error.message : "주문 목록을 불러오지 못했습니다.");
+      // DEV: API 실패 시에도 샘플 데이터 표시 — 삭제 방법: 아래 setOrders(MOCK_ORDERS) 제거
+      setOrders(MOCK_ORDERS);
+      showToast(error instanceof Error ? error.message : "주문 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -41,43 +186,55 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     fetchOrders();
     const pollingTimer = window.setInterval(fetchOrders, POLLING_INTERVAL_MS);
     const clockTimer = window.setInterval(() => setNow(Date.now()), 1000);
-
     return () => {
       window.clearInterval(pollingTimer);
       window.clearInterval(clockTimer);
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     };
   }, [fetchOrders]);
 
+  // Close account popover on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   const counts = useMemo(
     () => ({
-      NEW: orders.filter((order) => order.status === "NEW").length,
-      COOKING: orders.filter((order) => order.status === "COOKING").length,
-      DONE: orders.filter((order) => order.status === "DONE").length,
-      CANCELLED: orders.filter((order) => order.status === "CANCELLED").length,
+      NEW: orders.filter((o) => o.status === "NEW").length,
+      COOKING: orders.filter((o) => o.status === "COOKING").length,
+      DONE: orders.filter((o) => o.status === "DONE").length,
     }),
     [orders],
   );
+
   const receivedOrders = useMemo(
     () =>
       orders
-        .filter((order) => order.status === "NEW" || order.status === "COOKING")
-        .sort((left, right) => statusWeight(left.status) - statusWeight(right.status) || right.id - left.id),
+        .filter((o) => o.status === "NEW" || o.status === "COOKING")
+        .sort((a, b) => statusWeight(a.status) - statusWeight(b.status) || b.id - a.id),
     [orders],
   );
+
   const doneOrders = useMemo(
-    () => orders.filter((order) => order.status === "DONE").sort((left, right) => right.id - left.id),
+    () => orders.filter((o) => o.status === "DONE").sort((a, b) => b.id - a.id),
     [orders],
   );
 
   async function updateOrderStatus(orderId: number, status: OrderStatus) {
     setUpdatingOrderId(orderId);
     try {
-      await requestWithReauth(session.accessToken, onUnauthorized, (accessToken) =>
-        apiUpdateOrderStatus(accessToken, orderId, status),
+      await requestWithReauth(session.accessToken, onUnauthorized, (token) =>
+        apiUpdateOrderStatus(token, orderId, status),
       );
       await fetchOrders();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "주문 상태를 변경하지 못했습니다.");
+      showToast(error instanceof Error ? error.message : "주문 상태를 변경하지 못했습니다.");
     } finally {
       setUpdatingOrderId(null);
     }
@@ -85,6 +242,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
 
   async function handleLogout() {
     setLoggingOut(true);
+    setAccountOpen(false);
     try {
       await onLogout();
     } finally {
@@ -92,83 +250,236 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     }
   }
 
+  const activeOrders = activeTab === "RECEIVED" ? receivedOrders : doneOrders;
+  const initials = (session.user.name ?? session.store.storeName ?? "?")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
-    <main className="kds-shell">
-      <header className="top-bar">
-        <div>
-          <p className="eyebrow">현재 매장</p>
-          <h1>{session.store.storeName}</h1>
-          <p className="subtle-copy">
-            {session.user.name} 계정으로 연결됨 · {session.user.email} · {session.store.storeId}
-          </p>
-        </div>
-        <div className="top-bar-right">
-          <div className="status-strip" aria-label="주문 현황">
-            <StatusStat label="신규" value={counts.NEW} tone="new" />
-            <StatusStat label="조리중" value={counts.COOKING} tone="cooking" />
-            <StatusStat label="완료" value={counts.DONE} tone="done" />
-          </div>
-          <button className="secondary-button" disabled={loggingOut} onClick={handleLogout} type="button">
-            {loggingOut ? "로그아웃 중" : "로그아웃"}
-          </button>
-        </div>
-      </header>
+    <div className="kds-shell">
+      {/* ── Sidebar ── */}
+      <nav className={`kds-sidebar${sidebarOpen ? " open" : ""}`} aria-label="메인 내비게이션">
+        {/* Toggle button */}
+        <button
+          aria-label={sidebarOpen ? "메뉴 닫기" : "메뉴 열기"}
+          className="kds-sidebar-toggle"
+          onClick={() => setSidebarOpen((v) => !v)}
+          type="button"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            {sidebarOpen ? (
+              <>
+                <line x1="3" y1="3" x2="15" y2="15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="15" y1="3" x2="3" y2="15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </>
+            ) : (
+              <>
+                <line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="3" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </>
+            )}
+          </svg>
+          {sidebarOpen && <span className="kds-sidebar-toggle-label">닫기</span>}
+        </button>
 
-      {errorMessage ? <div className="banner error">{errorMessage}</div> : null}
-      {loading ? <div className="banner">주문 목록을 불러오는 중입니다.</div> : null}
-      {counts.CANCELLED > 0 ? (
-        <div className="banner">
-          취소 주문 {counts.CANCELLED}건은 보드에서 제외하고 상단 집계로만 관리합니다.
-        </div>
-      ) : null}
-
-      <section className="board-shell" aria-label="KDS 주문 보드">
-        <div className="board-tabs" role="tablist" aria-label="주문 보드 탭">
+        {/* Nav items */}
+        <div className="kds-sidebar-nav">
           <button
-            aria-selected={activeTab === "RECEIVED"}
-            className={activeTab === "RECEIVED" ? "board-tab active" : "board-tab"}
-            onClick={() => setActiveTab("RECEIVED")}
-            role="tab"
+            className={`kds-sidebar-item${activeTab === "RECEIVED" ? " active" : ""}`}
+            onClick={() => { setActiveTab("RECEIVED"); setSidebarOpen(false); }}
             type="button"
+            title="접수"
           >
-            접수
-            <span>{receivedOrders.length}</span>
+            {/* Order icon */}
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <rect x="3" y="2" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
+              <line x1="6" y1="6" x2="12" y2="6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="6" y1="9" x2="12" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="6" y1="12" x2="10" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            {sidebarOpen && (
+              <span>
+                접수
+                {counts.NEW + counts.COOKING > 0 && (
+                  <em className="kds-sidebar-badge">{counts.NEW + counts.COOKING}</em>
+                )}
+              </span>
+            )}
+            {!sidebarOpen && counts.NEW + counts.COOKING > 0 && (
+              <em className="kds-sidebar-dot" aria-hidden="true" />
+            )}
           </button>
+
           <button
-            aria-selected={activeTab === "DONE"}
-            className={activeTab === "DONE" ? "board-tab active" : "board-tab"}
-            onClick={() => setActiveTab("DONE")}
-            role="tab"
+            className={`kds-sidebar-item${activeTab === "DONE" ? " active" : ""}`}
+            onClick={() => { setActiveTab("DONE"); setSidebarOpen(false); }}
             type="button"
+            title="완료"
           >
-            완료
-            <span>{doneOrders.length}</span>
+            {/* Check icon */}
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M5.5 9L8 11.5L12.5 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {sidebarOpen && (
+              <span>
+                완료
+                {counts.DONE > 0 && (
+                  <em className="kds-sidebar-badge secondary">{counts.DONE}</em>
+                )}
+              </span>
+            )}
           </button>
         </div>
 
-        <div className="board-panel">
-          {activeTab === "RECEIVED" ? (
-            <OrderLane
-              emptyLabel="접수 또는 조리중 주문이 없습니다"
-              now={now}
-              onUpdateStatus={updateOrderStatus}
-              orders={receivedOrders}
-              updatingOrderId={updatingOrderId}
-            />
-          ) : (
-            <OrderLane
-              emptyLabel="완료된 주문이 없습니다"
-              now={now}
-              onUpdateStatus={updateOrderStatus}
-              orders={doneOrders}
-              updatingOrderId={updatingOrderId}
-            />
+        {/* Account section (bottom) */}
+        <div className="kds-sidebar-account" ref={accountRef}>
+          {accountOpen && (
+            <div className="kds-account-popover">
+              <div className="kds-account-popover-info">
+                <div className="kds-account-avatar large">{initials}</div>
+                <div>
+                  <p className="kds-account-name">{session.user.name ?? session.store.storeName}</p>
+                  <p className="kds-account-email">{session.user.email}</p>
+                </div>
+              </div>
+              <div className="kds-account-popover-divider" />
+              <button
+                className="kds-account-popover-item signout"
+                disabled={loggingOut}
+                onClick={handleLogout}
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M11 11l3-3-3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <line x1="14" y1="8" x2="6" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                {loggingOut ? "로그아웃 중…" : "로그아웃"}
+              </button>
+            </div>
           )}
+
+          <button
+            className={`kds-account-trigger${accountOpen ? " active" : ""}`}
+            onClick={() => setAccountOpen((v) => !v)}
+            type="button"
+            title={session.store.storeName}
+            aria-expanded={accountOpen}
+          >
+            <div className="kds-account-avatar">{initials}</div>
+            {sidebarOpen && (
+              <span className="kds-account-trigger-name">{session.store.storeName}</span>
+            )}
+          </button>
         </div>
-      </section>
-    </main>
+      </nav>
+
+      {/* ── Main content ── */}
+      <div className="kds-main">
+        {/* Top bar */}
+        <header className="kds-topbar">
+          <div className="kds-topbar-tabs" role="tablist">
+            <button
+              aria-selected={activeTab === "RECEIVED"}
+              className={`kds-tab${activeTab === "RECEIVED" ? " active" : ""}`}
+              onClick={() => setActiveTab("RECEIVED")}
+              role="tab"
+              type="button"
+            >
+              접수
+              <span className="kds-tab-count">{receivedOrders.length}</span>
+            </button>
+            <button
+              aria-selected={activeTab === "DONE"}
+              className={`kds-tab${activeTab === "DONE" ? " active" : ""}`}
+              onClick={() => setActiveTab("DONE")}
+              role="tab"
+              type="button"
+            >
+              완료
+              <span className="kds-tab-count">{doneOrders.length}</span>
+            </button>
+          </div>
+
+          <div className="kds-topbar-right">
+            <button
+              aria-label="주문 새로고침"
+              className={`kds-refresh-btn${loading ? " spinning" : ""}`}
+              disabled={loading}
+              onClick={fetchOrders}
+              type="button"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <path
+    d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        {/* Board */}
+        <section className="kds-board" aria-label="주문 보드">
+          {activeOrders.length === 0 ? (
+            <div className="kds-empty">
+              {activeTab === "RECEIVED" ? "접수된 주문이 없습니다" : "완료된 주문이 없습니다"}
+            </div>
+          ) : (
+            <div className="kds-lane">
+              {activeOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  now={now}
+                  onUpdateStatus={updateOrderStatus}
+                  order={order}
+                  updating={updatingOrderId === order.id}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div
+          className={`kds-toast${toast.type === "error" ? " error" : ""}`}
+          role="alert"
+          aria-live="assertive"
+        >
+          {toast.type === "error" && (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.4" />
+              <line x1="7" y1="4" x2="7" y2="7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <circle cx="7" cy="9.5" r="0.7" fill="currentColor" />
+            </svg>
+          )}
+          <span>{toast.message}</span>
+          <button
+            className="kds-toast-close"
+            onClick={() => setToast(null)}
+            type="button"
+            aria-label="닫기"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
+
+/* ── Helpers ── */
 
 async function requestWithReauth<T>(
   accessToken: string,
@@ -178,66 +489,14 @@ async function requestWithReauth<T>(
   try {
     return await request(accessToken);
   } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 401) {
-      throw error;
-    }
-
-    const nextAccessToken = await onUnauthorized();
-    if (!nextAccessToken) {
-      throw error;
-    }
-    return request(nextAccessToken);
+    if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    const next = await onUnauthorized();
+    if (!next) throw error;
+    return request(next);
   }
 }
 
-function StatusStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "new" | "cooking" | "done";
-}) {
-  return (
-    <div className={`status-stat ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function OrderLane({
-  emptyLabel,
-  now,
-  onUpdateStatus,
-  orders,
-  updatingOrderId,
-}: {
-  emptyLabel: string;
-  now: number;
-  onUpdateStatus: (orderId: number, status: OrderStatus) => Promise<void>;
-  orders: Order[];
-  updatingOrderId: number | null;
-}) {
-  if (orders.length === 0) {
-    return <div className="empty-state board-empty">{emptyLabel}</div>;
-  }
-
-  return (
-    <div className="lane-track">
-      {orders.map((order) => (
-        <OrderCard
-          key={order.id}
-          now={now}
-          onUpdateStatus={onUpdateStatus}
-          order={order}
-          updating={updatingOrderId === order.id}
-        />
-      ))}
-    </div>
-  );
-}
+/* ── Order Card ── */
 
 function OrderCard({
   now,
@@ -251,196 +510,165 @@ function OrderCard({
   updating: boolean;
 }) {
   const elapsed = formatElapsed(now, order.ordered_at ?? order.created_at);
-  const total = order.items.reduce((sum, item) => sum + (item.total_price ?? 0), 0);
+  const elapsedMinutes = getElapsedMinutes(now, order.ordered_at ?? order.created_at);
   const allergyRiskItemIds = getAllergyRiskItemIds(order.aiAnalysis);
-  const itemGridClass = getItemGridClass(order.items.length);
+  const isUrgent = elapsedMinutes >= 15;
+  const isWarning = elapsedMinutes >= 8 && elapsedMinutes < 15;
+  const orderTypeLabel = getOrderTypeLabel(order.platform);
 
   return (
-    <article className={`order-card ${order.status.toLowerCase()}`}>
-      <div className="card-head">
-        <div>
-          <p className="platform">{order.platform}</p>
-          <h3>{order.order_number}</h3>
+    <article className={`kds-card ${order.status.toLowerCase()}${isUrgent ? " urgent" : isWarning ? " warning" : ""}`}>
+      <div className="kds-card-head">
+        <div className="kds-card-head-left">
+          <span className="kds-order-num">#{order.order_number ?? order.id}</span>
+          <span className={`kds-elapsed-badge${isUrgent ? " urgent" : isWarning ? " warning" : ""}`}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M6 3.5V6L7.5 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            {elapsed} 경과
+          </span>
         </div>
-        <div className="card-head-meta">
-          <span className={`order-status-pill ${order.status.toLowerCase()}`}>{getStatusLabel(order.status)}</span>
-          <span className="elapsed">{elapsed}</span>
-        </div>
+        <span className="kds-order-type">{orderTypeLabel}</span>
       </div>
 
-      <div className={`items ${itemGridClass}`}>
+      <div className="kds-items">
         {order.items.map((item) => (
           <div
-            className={`item-row ${allergyRiskItemIds.has(item.id) ? "allergy-risk" : ""}`}
+            className={`kds-item${allergyRiskItemIds.has(item.id) ? " allergy-risk" : ""}`}
             key={item.id}
           >
-            <div>
-              <strong>{item.name}</strong>
-              {item.options.length > 0 ? (
-                <div className="option-lines">
-                  {item.options.map((option, index) => (
-                    <p key={`${item.id}-${index}`}>{option}</p>
+            <span className="kds-item-qty">{item.quantity}</span>
+            <div className="kds-item-body">
+              <span className="kds-item-name">{item.name}</span>
+              {item.options.length > 0 && (
+                <ul className="kds-item-options">
+                  {item.options.map((opt, i) => (
+                    <li key={`${item.id}-${i}`}>{opt}</li>
                   ))}
-                </div>
-              ) : null}
+                </ul>
+              )}
             </div>
-            <span>{item.quantity}</span>
           </div>
         ))}
       </div>
 
-      <AIAnalysisPanel analysis={order.aiAnalysis} customerRequest={order.customer_request} />
+      <RequestPanel analysis={order.aiAnalysis} customerRequest={order.customer_request} />
 
-      <div className="card-foot">
-        <span>{total > 0 ? `${total.toLocaleString("ko-KR")}원` : "금액 정보 없음"}</span>
-        {order.status === "NEW" ? (
-          <button disabled={updating} onClick={() => onUpdateStatus(order.id, "COOKING")}>
-            {updating ? "변경중" : order.aiAnalysis?.needsHumanCheck ? "확인 후 조리 시작" : "조리 시작"}
-          </button>
-        ) : null}
-        {order.status === "COOKING" ? (
-          <button disabled={updating} onClick={() => onUpdateStatus(order.id, "DONE")}>
-            {updating ? "변경중" : "완료"}
-          </button>
-        ) : null}
-      </div>
+      {order.status === "NEW" && (
+        <button
+          className="kds-action-btn"
+          disabled={updating}
+          onClick={() => onUpdateStatus(order.id, "COOKING")}
+          type="button"
+        >
+          {updating ? "변경중…" : "조리 시작"}
+        </button>
+      )}
+      {order.status === "COOKING" && (
+        <button
+          className="kds-action-btn complete"
+          disabled={updating}
+          onClick={() => onUpdateStatus(order.id, "DONE")}
+          type="button"
+        >
+          {updating ? "변경중…" : "완료"}
+        </button>
+      )}
     </article>
   );
 }
 
-function AIAnalysisPanel({
+/* ── Request / AI panel ── */
+
+function RequestPanel({
   analysis,
   customerRequest,
 }: {
   analysis: OrderAIAnalysis | null;
   customerRequest: string | null;
 }) {
-  const originalText = customerRequest?.trim() ?? "";
+  const rawText = customerRequest?.trim() ?? "";
+  if (!analysis && !rawText) return null;
 
   if (!analysis) {
-    if (!originalText) {
-      return null;
-    }
     return (
-      <div className="ai-panel pending">
-        <div className="ai-panel-head">
-          <span>주의 요청</span>
-        </div>
-        <p>원문 요청을 먼저 확인하세요. AI 분석 결과는 아직 준비되지 않았습니다.</p>
-        <OriginalRequest label="원문 요청" text={originalText} />
+      <div className="kds-request-panel">
+        <span className="kds-request-label">요청사항</span>
+        <p className="kds-request-text">{rawText}</p>
       </div>
     );
   }
 
-  const kitchenActions = analysis.kitchenActions ?? [];
-  const hasVisibleContent = kitchenActions.length > 0 || originalText;
-
-  if (!hasVisibleContent && analysis.analysisStatus !== "PENDING" && analysis.analysisStatus !== "FAILED") {
-    return null;
-  }
+  const actions = analysis.kitchenActions ?? [];
+  const hasActions = actions.length > 0;
+  const hasRaw = !!rawText;
+  if (!hasActions && !hasRaw) return null;
 
   return (
-    <div className="ai-panel">
-      <div className="ai-panel-head">
-        <span>주의 요청</span>
-      </div>
-
-      {analysis.analysisStatus === "PENDING" ? (
-        <>
-          <p>원문 요청을 먼저 확인하세요. AI 분석 결과는 아직 준비되지 않았습니다.</p>
-          <OriginalRequest label="원문 요청" text={originalText} />
-        </>
-      ) : analysis.analysisStatus === "FAILED" ? (
-        <>
-          <p>AI 분석에 실패했습니다. 원문 요청을 직접 확인해주세요.</p>
-          <OriginalRequest label="원문 요청" text={originalText} />
-        </>
+    <div className={`kds-request-panel${analysis.needsHumanCheck ? " needs-check" : ""}`}>
+      {analysis.needsHumanCheck ? (
+        <span className="kds-request-label urgent">AI 주의 요청</span>
       ) : (
-        <>
-          {kitchenActions.length > 0 ? (
-            <div className="action-list">
-              {kitchenActions.map((action, index) => (
-                <span className={`action-chip ${getActionTone(action)}`} key={`${action.displayText}-${index}`}>
-                  {action.displayText}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p>조리 주의사항은 감지되지 않았습니다. 원문 요청만 참고하세요.</p>
-          )}
-          <OriginalRequest label="원문 참고" text={originalText} />
-        </>
+        <span className="kds-request-label">요청사항</span>
       )}
+      {hasActions && (
+        <div className="kds-action-chips">
+          {actions.map((action, i) => (
+            <span className={`kds-chip ${getActionTone(action)}`} key={`${action.displayText}-${i}`}>
+              {action.displayText}
+            </span>
+          ))}
+        </div>
+      )}
+      {hasRaw && <p className="kds-request-text">{rawText}</p>}
     </div>
   );
 }
 
-function OriginalRequest({ label, text }: { label: string; text: string }) {
-  if (!text) {
-    return null;
-  }
+/* ── Pure helpers ── */
 
-  return (
-    <p className="original-request">
-      <span>{label}:</span>{" "}
-      {text}
-    </p>
-  );
+function getOrderTypeLabel(platform: string) {
+  const p = platform?.toLowerCase() ?? "";
+  if (p.includes("delivery") || p.includes("배달")) return "배달";
+  if (p.includes("takeout") || p.includes("포장") || p.includes("take")) return "포장";
+  return "매장";
 }
 
 function getActionTone(action: AnalysisAction) {
-  if (action.type === "ALLERGY" || action.type === "SAFETY_CHECK" || action.severity === "HIGH") {
-    return "danger";
-  }
-  if (action.type === "COOKING_REQUEST" || action.type === "TASTE_ADJUSTMENT") {
-    return "cook";
-  }
-  if (action.type === "EXCLUDE_INGREDIENT") {
-    return "exclude";
-  }
+  if (action.type === "ALLERGY" || action.type === "SAFETY_CHECK" || action.severity === "HIGH") return "danger";
+  if (action.type === "COOKING_REQUEST" || action.type === "TASTE_ADJUSTMENT") return "cook";
+  if (action.type === "EXCLUDE_INGREDIENT") return "exclude";
   return "neutral";
 }
 
 function getAllergyRiskItemIds(analysis: OrderAIAnalysis | null) {
   const ids = new Set<number>();
   analysis?.kitchenActions
-    ?.filter((action) => action.type === "ALLERGY")
-    .forEach((action) => action.matchedMenuItemIds?.forEach((id) => ids.add(id)));
+    ?.filter((a) => a.type === "ALLERGY")
+    .forEach((a) => a.matchedMenuItemIds?.forEach((id) => ids.add(id)));
   return ids;
+}
+
+function getElapsedMinutes(now: number, timestamp: string) {
+  const start = parseApiTimestamp(timestamp).getTime();
+  if (Number.isNaN(start)) return 0;
+  return Math.floor((now - start) / 60000);
 }
 
 function formatElapsed(now: number, timestamp: string) {
   const start = parseApiTimestamp(timestamp).getTime();
-  if (Number.isNaN(start)) {
-    return "-";
-  }
-
+  if (Number.isNaN(start)) return "-";
   const seconds = Math.max(0, Math.floor((now - start) / 1000));
-  if (seconds < 60) {
-    return `${seconds}초`;
-  }
-
+  if (seconds < 60) return `${seconds}초`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}분`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  return `${hours}시간`;
+  if (minutes < 60) return `${minutes}분`;
+  return `${Math.floor(minutes / 60)}시간`;
 }
 
 function parseApiTimestamp(timestamp: string) {
-  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
-    return new Date(timestamp);
-  }
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(timestamp)) return new Date(timestamp);
   return new Date(`${timestamp}Z`);
-}
-
-function getStatusLabel(status: OrderStatus) {
-  if (status === "NEW") return "접수"
-  if (status === "COOKING") return "조리중"
-  if (status === "DONE") return "완료"
-  return "취소"
 }
 
 function statusWeight(status: OrderStatus) {
@@ -448,14 +676,4 @@ function statusWeight(status: OrderStatus) {
   if (status === "COOKING") return 1;
   if (status === "DONE") return 2;
   return 3;
-}
-
-function getItemGridClass(itemCount: number) {
-  if (itemCount >= 6) {
-    return "triple";
-  }
-  if (itemCount >= 3) {
-    return "double";
-  }
-  return "single";
 }
