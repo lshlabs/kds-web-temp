@@ -6,6 +6,139 @@ import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus }
 const POLLING_INTERVAL_MS = 3000;
 type BoardTab = "RECEIVED" | "DONE";
 
+// ── DEV 샘플 주문 데이터 ──────────────────────────────────────────────────────
+// 삭제 방법: 아래 MOCK_ORDERS 상수와 fetchOrders 내 "|| MOCK_ORDERS" 부분을 제거
+const _now = new Date();
+const _ago = (min: number) => new Date(_now.getTime() - min * 60 * 1000).toISOString();
+
+const MOCK_ORDERS: Order[] = [
+  {
+    id: 1001,
+    platform: "store",
+    store_id: "DEV-001",
+    external_order_id: "ext-1001",
+    order_number: "1",
+    status: "NEW",
+    customer_request: "젓가락 빼주세요",
+    delivery_request: null,
+    ordered_at: _ago(3),
+    created_at: _ago(3),
+    updated_at: _ago(3),
+    items: [
+      { id: 1, name: "제육볶음", quantity: 2, options: [], unit_price: 9000, total_price: 18000 },
+      { id: 2, name: "된장찌개", quantity: 1, options: ["공기밥 추가", "라면 사리 추가"], unit_price: 8000, total_price: 8000 },
+      { id: 3, name: "소머리국밥", quantity: 1, options: [], unit_price: 11000, total_price: 11000 },
+    ],
+    aiAnalysis: null,
+  },
+  {
+    id: 1002,
+    platform: "delivery",
+    store_id: "DEV-001",
+    external_order_id: "ext-1002",
+    order_number: "2",
+    status: "COOKING",
+    customer_request: "매운 거 잘 못 먹어서 떡볶이는 안맵게 조절 부탁드려요",
+    delivery_request: "문 앞에 놔주세요",
+    ordered_at: _ago(11),
+    created_at: _ago(11),
+    updated_at: _ago(8),
+    items: [
+      { id: 4, name: "[세트메뉴] 떡볶이 + 순대", quantity: 1, options: ["소스 추가"], unit_price: 14000, total_price: 14000 },
+      { id: 5, name: "목은지 김치찜", quantity: 2, options: [], unit_price: 12000, total_price: 24000 },
+    ],
+    aiAnalysis: {
+      summary: "매운맛 조절 요청",
+      tags: ["맵기조절"],
+      cookingNotes: ["떡볶이 덜 맵게"],
+      packingNotes: [],
+      deliveryNotes: ["문 앞"],
+      kitchenActions: [
+        {
+          type: "TASTE_ADJUSTMENT",
+          label: "맵기 조절",
+          target: "떡볶이",
+          displayText: "떡볶이 덜 맵게",
+          severity: "LOW",
+          requiresHumanCheck: false,
+          source: "customer_request",
+          sourceText: "안맵게 조절",
+          matchedMenuItemIds: [4],
+        },
+      ],
+      packingActions: [],
+      ignoredRequests: [],
+      riskLevel: "LOW",
+      warnings: [],
+      needsHumanCheck: false,
+      analysisStatus: "COMPLETED",
+    },
+  },
+  {
+    id: 1003,
+    platform: "takeout",
+    store_id: "DEV-001",
+    external_order_id: "ext-1003",
+    order_number: "3",
+    status: "COOKING",
+    customer_request: "견과류 알레르기 있어요. 땅콩 절대 안됩니다",
+    delivery_request: null,
+    ordered_at: _ago(17),
+    created_at: _ago(17),
+    updated_at: _ago(12),
+    items: [
+      { id: 6, name: "잡채", quantity: 1, options: [], unit_price: 9000, total_price: 9000 },
+      { id: 7, name: "궁중 떡볶이", quantity: 2, options: ["치즈 추가"], unit_price: 10000, total_price: 20000 },
+    ],
+    aiAnalysis: {
+      summary: "견과류 알레르기 주의",
+      tags: ["알레르기"],
+      cookingNotes: ["땅콩 사용 금지"],
+      packingNotes: [],
+      deliveryNotes: [],
+      kitchenActions: [
+        {
+          type: "ALLERGY",
+          label: "알레르기",
+          target: "견과류",
+          displayText: "땅콩 제외 (알레르기)",
+          severity: "HIGH",
+          requiresHumanCheck: true,
+          source: "customer_request",
+          sourceText: "견과류 알레르기 있어요",
+          matchedMenuItemIds: [6, 7],
+        },
+      ],
+      packingActions: [],
+      ignoredRequests: [],
+      riskLevel: "HIGH",
+      warnings: ["알레르기 위험 항목 포함"],
+      needsHumanCheck: true,
+      analysisStatus: "COMPLETED",
+    },
+  },
+  {
+    id: 1004,
+    platform: "store",
+    store_id: "DEV-001",
+    external_order_id: "ext-1004",
+    order_number: "4",
+    status: "DONE",
+    customer_request: null,
+    delivery_request: null,
+    ordered_at: _ago(32),
+    created_at: _ago(32),
+    updated_at: _ago(25),
+    items: [
+      { id: 8, name: "뚝배기 불고기", quantity: 1, options: [], unit_price: 13000, total_price: 13000 },
+      { id: 9, name: "참치마요 주먹밥", quantity: 3, options: [], unit_price: 3000, total_price: 9000 },
+      { id: 10, name: "라면", quantity: 1, options: ["사리 추가"], unit_price: 5000, total_price: 5000 },
+    ],
+    aiAnalysis: null,
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────
+
 type KdsPageProps = {
   session: AuthSession;
   onLogout: () => Promise<void>;
@@ -34,12 +167,15 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const fetchOrders = useCallback(async () => {
     try {
       const data = await requestWithReauth(session.accessToken, onUnauthorized, apiGetKdsOrders);
-      setOrders(data.orders);
+      // DEV: API 결과가 비어 있으면 샘플 데이터 사용 — 삭제 방법: "|| MOCK_ORDERS" 부분 제거
+      setOrders(data.orders.length > 0 ? data.orders : MOCK_ORDERS);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         showToast("로그인이 만료되었습니다.");
         return;
       }
+      // DEV: API 실패 시에도 샘플 데이터 표시 — 삭제 방법: 아래 setOrders(MOCK_ORDERS) 제거
+      setOrders(MOCK_ORDERS);
       showToast(error instanceof Error ? error.message : "주문 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);

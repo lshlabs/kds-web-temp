@@ -22,8 +22,8 @@ export function DevNav({ current, onNavigate }: DevNavProps) {
       aria-label="개발용 페이지 이동"
       style={{
         position: "fixed",
-        top: 12,
-        right: 12,
+        bottom: 16,
+        right: 16,
         display: "flex",
         gap: 4,
         zIndex: 9999,
