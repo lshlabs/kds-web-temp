@@ -161,11 +161,7 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
           </div>
 
           {/* Heading */}
-          {tab === "register" && (
-            <div className="auth-form-head">
-              <h2>매장 등록</h2>
-            </div>
-          )}
+          {tab === "register"}
 
           {/* Error */}
           {errorMessage ? <div className="banner error" role="alert">{errorMessage}</div> : null}
@@ -279,7 +275,7 @@ export function AuthPage({ onLoginSuccess, onRegisterSuccess }: AuthPageProps) {
                   />
                 </div>
                 <div className="field">
-                  <label htmlFor="reg-phone">매장 연락처</label>
+                  <label htmlFor="reg-phone">연락처</label>
                   <input
                     id="reg-phone"
                     name="storePhone"
